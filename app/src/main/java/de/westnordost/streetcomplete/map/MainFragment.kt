@@ -22,6 +22,7 @@ import androidx.annotation.AnyThread
 import androidx.annotation.UiThread
 import androidx.core.graphics.toPointF
 import androidx.core.graphics.toRectF
+import androidx.core.view.children
 import androidx.core.view.doOnLayout
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.FragmentManager.POP_BACK_STACK_INCLUSIVE
@@ -51,13 +52,18 @@ import de.westnordost.streetcomplete.location.LocationUtil
 import de.westnordost.streetcomplete.location.SingleLocationRequest
 import de.westnordost.streetcomplete.map.tangram.CameraPosition
 import de.westnordost.streetcomplete.quests.*
+import de.westnordost.streetcomplete.util.initialBearingTo
 import kotlinx.android.synthetic.main.fragment_map_with_controls.*
 import javax.inject.Inject
+import kotlin.math.PI
+import kotlin.math.cos
 import kotlin.math.max
+import kotlin.math.sin
 
 /** Contains the quests map and the controls for it. */
 class MainFragment : Fragment(R.layout.fragment_map_with_controls),
-    MapFragment.Listener, QuestsMapFragment.Listener, AbstractQuestAnswerFragment.Listener,
+    MapFragment.Listener, LocationAwareMapFragment.Listener, QuestsMapFragment.Listener,
+    AbstractQuestAnswerFragment.Listener,
     SplitWayFragment.Listener, LeaveNoteInsteadFragment.Listener, CreateNoteFragment.Listener,
     VisibleQuestListener {
 
@@ -111,6 +117,9 @@ class MainFragment : Fragment(R.layout.fragment_map_with_controls),
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
+        locationPointerPin.setPinIcon(R.drawable.location_dot_small)
+        locationPointerPin.setOnClickListener { onClickLocationPointer() }
+
         compassView.setOnClickListener { onClickCompassButton() }
         gpsTrackingButton.setOnClickListener { onClickTrackingButton() }
         zoomInButton.setOnClickListener { onClickZoomIn() }
@@ -156,6 +165,7 @@ class MainFragment : Fragment(R.layout.fragment_map_with_controls),
         } else {
             updateMapQuestOffsets()
         }
+        updateLocationPointerPin()
     }
 
     override fun onStart() {
@@ -193,12 +203,14 @@ class MainFragment : Fragment(R.layout.fragment_map_with_controls),
 
     override fun onMapInitialized() {
         gpsTrackingButton.isActivated = mapFragment?.isFollowingPosition ?: false
-        gpsTrackingButton.isCompassMode = mapFragment?.isCompassMode ?: false
+        updateLocationPointerPin()
     }
 
     override fun onMapIsChanging(position: LatLon, rotation: Float, tilt: Float, zoom: Float) {
         compassNeedleView.rotation = (180 * rotation / Math.PI).toFloat()
         compassNeedleView.rotationX = (180 * tilt / Math.PI).toFloat()
+
+        updateLocationPointerPin()
 
         val f = bottomSheetFragment
         if (f is AbstractQuestAnswerFragment<*>) f.onMapOrientation(rotation, tilt)
@@ -209,6 +221,12 @@ class MainFragment : Fragment(R.layout.fragment_map_with_controls),
     }
 
     override fun onMapDidChange(position: LatLon, rotation: Float, tilt: Float, zoom: Float, animated: Boolean) { }
+
+    /* --------------------------- LocationAwareMapFragment.Listener ---------------------------- */
+
+    override fun onLocationDidChange() {
+        updateLocationPointerPin()
+    }
 
     /* ------------------------------- QuestsMapFragment.Listener ------------------------------- */
 
@@ -353,21 +371,27 @@ class MainFragment : Fragment(R.layout.fragment_map_with_controls),
     }
 
     private fun onLocationIsEnabled() {
+        gpsTrackingButton.visibility = View.VISIBLE
         gpsTrackingButton.state = LocationState.SEARCHING
         mapFragment!!.startPositionTracking()
         singleLocationRequest?.startRequest(LocationRequest.PRIORITY_HIGH_ACCURACY) {
+            gpsTrackingButton.visibility = View.INVISIBLE
             gpsTrackingButton.state = LocationState.UPDATING
+            updateLocationPointerPin()
         }
     }
 
     private fun onLocationIsDisabled() {
+        gpsTrackingButton.visibility = View.VISIBLE
         gpsTrackingButton.state = if (LocationUtil.hasLocationPermission(activity)) LocationState.ALLOWED else LocationState.DENIED
+        locationPointerPin.visibility = View.GONE
         mapFragment!!.stopPositionTracking()
         singleLocationRequest?.stopRequest()
     }
 
     private fun onLocationRequestFinished(state: LocationState) {
         if (activity == null) return
+        gpsTrackingButton.visibility = View.VISIBLE
         gpsTrackingButton.state = state
         if (state.isEnabled) {
             updateLocationAvailability()
@@ -451,7 +475,44 @@ class MainFragment : Fragment(R.layout.fragment_map_with_controls),
     private fun setIsCompassMode(compassMode: Boolean) {
         val mapFragment = mapFragment ?: return
         mapFragment.isCompassMode = compassMode
-        gpsTrackingButton.isCompassMode = compassMode
+    }
+
+    /* ---------------------------------- Location Pointer Pin  --------------------------------- */
+
+    private fun updateLocationPointerPin() {
+        val mapFragment = mapFragment ?: return
+        val view = view as? ViewGroup ?: return
+        val camera = mapFragment.cameraPosition ?: return
+        val position = camera.position
+        val rotation = camera.rotation
+
+        val location = mapFragment.displayedLocation
+        if (location == null) {
+            locationPointerPin.visibility = View.GONE
+            return
+        }
+        val displayedPosition = OsmLatLon(location.latitude, location.longitude)
+        val angle = position.initialBearingTo(displayedPosition)
+
+        val target = mapFragment.getPointOf(displayedPosition) ?: return
+        val intersection = findClosestIntersection(view, target)
+
+        if (intersection == null) {
+            locationPointerPin.visibility = View.GONE
+        } else {
+            locationPointerPin.visibility = View.VISIBLE
+            locationPointerPin.pinRotation = angle.toFloat() + (180 * rotation / PI).toFloat()
+
+            val a = angle * PI / 180f + rotation
+            val offsetX = (sin(a)/2.0 + 0.5) * locationPointerPin.width
+            val offsetY = (-cos(a)/2.0 + 0.5) * locationPointerPin.height
+            locationPointerPin.x = intersection.x - offsetX.toFloat()
+            locationPointerPin.y = intersection.y - offsetY.toFloat()
+        }
+    }
+
+    private fun onClickLocationPointer() {
+        setIsFollowingPosition(true)
     }
 
     /* --------------------------------- Managing bottom sheet  --------------------------------- */
@@ -568,9 +629,8 @@ class MainFragment : Fragment(R.layout.fragment_map_with_controls),
 
     private fun hideAll(parent: ViewGroup, dir: Int) {
         val w = parent.width
-        for (i in 0 until parent.childCount) {
-            val v = parent.getChildAt(i)
-            v.translationX = w * dir.toFloat()
+        for (child in parent.children) {
+            child.translationX = w * dir.toFloat()
         }
     }
 
