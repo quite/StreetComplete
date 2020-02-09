@@ -8,7 +8,6 @@ import java.io.File
 import java.util.concurrent.TimeUnit
 
 class CachingHttpHandler @JvmOverloads constructor(
-    private val apiKey: String?,
     private val cacheDirectory: File?,
     private val maxCacheSizeInBytes: Long = 16 * 1024 * 1024,
     private val cacheControl: CacheControl = CacheControl.Builder().maxStale(7, TimeUnit.DAYS).build()
@@ -21,9 +20,6 @@ class CachingHttpHandler @JvmOverloads constructor(
     }
 
     override fun configureRequest(url: HttpUrl, builder: Request.Builder) {
-        if (apiKey != null)
-            builder.url(url.newBuilder().addQueryParameter("api_key", apiKey).build())
-
         builder
             .cacheControl(cacheControl)
             .header("User-Agent", ApplicationConstants.USER_AGENT + " / " + Version.userAgent())

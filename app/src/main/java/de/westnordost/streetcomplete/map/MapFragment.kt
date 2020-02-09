@@ -162,7 +162,10 @@ open class MapFragment : Fragment(),
     }
 
     protected open suspend fun getSceneUpdates(): List<SceneUpdate> {
-        return listOf(SceneUpdate("global.language", Locale.getDefault().language))
+        return listOf(
+            SceneUpdate("global.language", Locale.getDefault().language),
+            SceneUpdate("global.sdk_api_key", MAPZEN_API_KEY ?: "")
+        )
     }
 
     protected open fun getSceneFilePath(): String {
@@ -177,7 +180,7 @@ open class MapFragment : Fragment(),
         val cacheDir = context!!.externalCacheDir
         val tileCacheDir: File?
         tileCacheDir = cacheDir?.let { File(cacheDir, "tile_cache") }
-        return CachingHttpHandler(MAPZEN_API_KEY, tileCacheDir, (cacheSize * 1024L * 1024L))
+        return CachingHttpHandler(tileCacheDir, (cacheSize * 1024L * 1024L))
     }
 
     /* ----------------------------- Overrideable map callbacks --------------------------------- */
