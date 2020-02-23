@@ -765,4 +765,5 @@ Dela den nu?"</string>
     <string name="about_title_donate">"Donera"</string>
     <string name="about_summary_donate">"Visa din uppskattning! ❤️"</string>
     <string name="about_description_donate">"Tack för att du överväger att stöda den här appen! För att se aktuella donationer och donera själv, tryck på respektive plattform:"</string>
+    <string name="quest_accepts_cash_title">"Tar %s emot kontanter?"</string>
 </resources>
