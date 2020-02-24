@@ -8,6 +8,9 @@ import de.westnordost.streetcomplete.data.osm.download.OverpassMapDataAndGeometr
 import de.westnordost.streetcomplete.quests.YesNoQuestAnswerFragment
 
 class AddAcceptsCash(o: OverpassMapDataAndGeometryDao) : SimpleOverpassQuestType<Boolean>(o) {
+    override val enabledInCountries = NoCountriesExcept(
+        "SE"
+    )
 //nodes, ways with amenity = toilets and access !~ private|customers and !fee
     private val amenity = listOf(
         "bar", "cafe", "fast_food", "food_court", "ice_cream", "pub", "biergarten",
