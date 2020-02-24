@@ -12,6 +12,7 @@ class AddAcceptsCash(o: OverpassMapDataAndGeometryDao) : SimpleOverpassQuestType
         "SE"
     )
 //nodes, ways with amenity = toilets and access !~ private|customers and !fee
+questcash
     private val amenity = listOf(
         "bar", "cafe", "fast_food", "food_court", "ice_cream", "pub", "biergarten",
         "restaurant", "cinema", "nightclub", "planetarium", "theatre", "marketplace",
